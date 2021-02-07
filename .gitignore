@@ -2,7 +2,15 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
+*.csv
+*.html
+*.INF
+*.RPT
+*.ZYD
+*.CFG
+*.DAT
+!cfg_file.CFG
+!cfg_file.DAT
 # C extensions
 *.so
 
