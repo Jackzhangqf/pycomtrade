@@ -52,8 +52,8 @@ class Cfg_file(object):
         self.version=1991   #版本号1991或1999
         self.dev_name="Default_name"    #装置名称
         self.channel=0  #总通道数量
-        self.a_c=100  #模拟通道数量
-        self.d_c=100  #数字通道数量
+        self.a_c=0  #模拟通道数量
+        self.d_c=0  #数字通道数量
         self.Achannel_info=[]   #模拟通道对象列表
         self.Dchannel_info=[]   #数字通道对象列表
         self.reference_frequency=50 #基准频率默认为50Hz
@@ -75,7 +75,7 @@ class Cfg_file(object):
         self.datafile_len = file_len
         
     def get_data_len(self):
-        '''得到一条数据的长度'''
+        '''得到一条数据的字节长度'''
         data_len = self.a_c*2+8
         d_temp = self.d_c%16
         temp1=int(self.d_c/16)#python3中这个值有小数点的话会保留，python2有小数点的话直接舍去就没有小数点了
@@ -96,6 +96,7 @@ class Cfg_file(object):
         self.datafile_name = os.path.splitext(self.path)[0]
         cfg_line = None
         line_count = 0#记录当前行号
+        return_value = True #2021-05-19 添加用来反馈配置文件的格式有无问题。
         try:
             if os.path.exists(dir_of_file):
                 #if os.path.splitext(self.path)[1] == ".CFG":2020-07-11修复的Bug
@@ -157,7 +158,9 @@ class Cfg_file(object):
                                     print (u"采样区块数量部分行号定位错误%s"%cfg_line)   
                             elif line_count >= self.a_c+5+self.d_c and line_count <= self.a_c+5+self.d_c+self.sample_section-1:
                                 if len(cfg_line) == 2:
-                                    self.sample_rate_points[0].append(int(cfg_line[0]))
+                                    temp_0 = cfg_line[0].rstrip()#去除字符串末尾的换行符
+                                    temp_0 = temp_0.split('.')[0]
+                                    self.sample_rate_points[0].append(int(temp_0))
                                     self.sample_rate_points[1].append(int(cfg_line[1][0:-1]))
                                 else:
                                     print (u"采样率信息定位错误%s"%cfg_line)
@@ -190,14 +193,15 @@ class Cfg_file(object):
                 else:
                     print (u"这个不是一个配置文件！")
         except Exception as e:
-            print (u"-------------------------------------------------------------错误信息")
-            print ("str(Exception):\t", str(Exception))
-            print ("str(e):\t\t",str(e))
-            print ("repr(e):\t", repr(e))
-            #print ("e.message:\t", e.values)
-            print ("traceback.print_exc():", traceback.print_exc())
-            print ("traceback.format_exc():\n%s" % traceback.format_exc())
-            print (u"-------------------------------------------------------------错误信息结束")
+            # print (u"-------------------------------------------------------------错误信息")
+            # print ("str(Exception):\t", str(Exception))
+            # print ("str(e):\t\t",str(e))
+            # print ("repr(e):\t", repr(e))
+            # print ("traceback.print_exc():", traceback.print_exc())
+            # print ("traceback.format_exc():\n%s" % traceback.format_exc())
+            # print (u"-------------------------------------------------------------错误信息结束")
+            return_value = False
+        return return_value
 
                 
     def cfg_info_echo(self):
@@ -226,8 +230,110 @@ class Cfg_file(object):
         print (u"采样总时间核对：%f"%t)
         print (u"数据格式：%s"%self.data_format)
         print (u"时间标记乘数：%s"%self.timemult)
+    
+    def parse(self):
+        '''
+        2021.05.20添加
+        简化文件解析过程
+        '''
+        if self.parse_file():
+            self.get_data_len()
+            self.get_datafile_len()
+            return True
+        else:
+            return False
+    def compare_cfgs(self,cfg_obj):
+        '''
+        生成日期：2021-05-19
+        作者：Jackzhangqf
+        用于比较两个配置文件是否相同，有以下几个条件：
+        （1）站点名称必须一致，装置编号必须一致
+        （2）模拟通道数和数字通道数必须一致
+        （3）模拟通道的名称必须一致
+        （4）数字通道的名称必须一致
 
+        '''
+        flag = True
+        if self.data_len:
+            if_parse_self = True
+        else:#没解析过
+            if_parse_self = self.parse()
+        if cfg_obj.data_len:
+            if_parse_cfgobj = True
+        else:#没解析过
+            if_parse_cfgobj = cfg_obj.parse()
+        if isinstance(cfg_obj,Cfg_file):
+            if if_parse_self and if_parse_cfgobj:
+                # 站点名称必须一致，装置编号必须一致
+                if self.station_name == cfg_obj.station_name and self.dev_name == cfg_obj.dev_name:
+                    #模拟通道数和数字通道数必须一致
+                    if self.a_c == cfg_obj.a_c and self.d_c == cfg_obj.d_c:
+                        #模拟通道的名称必须一致
+                        for i in self.Achannel_info:
+                            if i.cch_id == cfg_obj.Achannel_info[self.Achannel_info.index(i)].cch_id:
+                                pass
+                            else:
+                                flag = False
+                                break
+                        #数字通道的名称必须一致
+                        for i in self.Dchannel_info:
+                            if i.cch_id == cfg_obj.Dchannel_info[self.Dchannel_info.index(i)].cch_id:
+                                pass
+                            else:
+                                flag = False
+                                break
+                    else:
+                        flag = False
+                else:
+                    flag = False
+            else:
+                flag = False
+        else:
+            flag = False
+        return flag
+    def compare_chname(self,cfg_obj):
+        '''
+        生成日期：2021-05-20
+        作者：Jackzhangqf
+        用于比较两个配置文件是否相同，有以下几个条件：
+        （1）模拟通道数和数字通道数必须一致
+        （2）模拟通道的名称必须一致
+        （3）数字通道的名称必须一致
 
+        '''
+        flag = True
+        if self.data_len:
+            if_parse_self = True
+        else:#没解析过
+            if_parse_self = self.parse()
+        if cfg_obj.data_len:
+            if_parse_cfgobj = True
+        else:#没解析过
+            if_parse_cfgobj = cfg_obj.parse()
+        if isinstance(cfg_obj,Cfg_file):
+            if if_parse_self and if_parse_cfgobj:
+                if self.a_c == cfg_obj.a_c and self.d_c == cfg_obj.d_c:
+                    #模拟通道的名称必须一致
+                    for i in self.Achannel_info:
+                        if i.cch_id == cfg_obj.Achannel_info[self.Achannel_info.index(i)].cch_id:
+                            pass
+                        else:
+                            flag = False
+                            break
+                    #数字通道的名称必须一致
+                    for i in self.Dchannel_info:
+                        if i.cch_id == cfg_obj.Dchannel_info[self.Dchannel_info.index(i)].cch_id:
+                            pass
+                        else:
+                            flag = False
+                            break
+                else:
+                    flag = False
+            else:
+                flag = False
+        else:
+            flag = False
+        return flag
 if __name__ == "__main__":
     '''try:
     

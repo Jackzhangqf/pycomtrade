@@ -5,6 +5,7 @@
 #BugFixed:
 #(1)2021.02.02 [BUG001]不能减1，2021.02.02日修复，不然在提取数字通道39的时候会提取到31的数值，刚好错开了一个字节
 #(2)2021.02.03 [BUG002]
+#(3)2021.03.20 [BUG003]
 #-----------------------------
 #问题1：数据的二进制格式：（4个字节描述采样点序号，低字节在前）+（4个字节描述时间标记）+
 #     （模拟通道*2）+（数字通道/8，这里有余数的话必须加1）=每个数据点的字节数
@@ -13,11 +14,7 @@
 from comtrade_cfg import Cfg_file,Achannel_info,Dchannel_info
 import os
 import struct
-import matplotlib.pyplot as plt
-import numpy as np
-from scipy import interpolate
-from scipy.optimize import leastsq 
-
+import datetime
 #对象说明：
 #功能一：具备选择性输出数据通道的能力，比如输出第1、2、3模拟通道和第1、2、3数字通道，便于数据分析
 #功能二：具备输出不同数据格式的能力（格式可以自定义），比如：CSV，TXT
@@ -36,6 +33,14 @@ class Data_file(object):
         if os.path.isfile(self.cfg.datafile_name+'.DAT'):
             self.fd = open(self.cfg.datafile_name+'.DAT','rb')
             file_len = os.path.getsize(self.cfg.datafile_name+'.DAT')
+            if file_len == self.cfg.datafile_len:
+                return True
+            else :
+                print (u'文件长度不匹配：原始文件长度为%s而计算得到的文件长度为%s'%(file_len,cfg.datafile_len))
+                return False
+        elif os.path.isfile(self.cfg.datafile_name+'.dat'):
+            self.fd = open(self.cfg.datafile_name+'.dat','rb')
+            file_len = os.path.getsize(self.cfg.datafile_name+'.dat')
             if file_len == self.cfg.datafile_len:
                 return True
             else :
@@ -89,7 +94,7 @@ class Ch_objects(object):
         #print list(tuple_data)
         #print len(self.all_ch)
         
-    def get_chs_data(self,id_list):
+    def get_chs_data(self,id_list=[]):
         '''
         Info:根据输入的通道号，生成相应的通道数据
         '''
@@ -163,7 +168,10 @@ class Ch_objects(object):
                     ch_obj.ch_points[0].append(data[1])      
                 else:
                     raise TypeError("You need a class[Achannel_info,Dchannel_info]")
-                self.ch_objects.append(ch_obj)
+                #[BUG003]
+                #self.ch_objects.append(ch_obj)#导致重复导入ch_objects文件对象
+            self.ch_objects.append(ch_obj)#[BUG003]:已修复2021.03.20
+                
     def create_csv(self,path=None):
         '''
         Info:Create a *.csv
@@ -222,7 +230,11 @@ class Ch_objects(object):
         
         #df = pd.DataFrame(np.random.randn(6, 4), index=dates, columns=list('ABCD'))
         #将DataFrame存储为csv,index表示是否显示行名，default=True
-        df.to_csv("test.csv",sep=',')
+        if path:#如果存在另存为的文件名
+            df.to_csv(path,sep=',',encoding = 'utf_8_sig')
+        else:#如果不存在
+            now_path  = datetime.datetime.now().strftime('%Y%m%d%H%M%S')+'.csv'
+            df.to_csv(now_path,sep=',',encoding = 'utf_8_sig')
         return df
         #dataframe.to_csv("test.csv",index=False,sep=',')
 
@@ -238,7 +250,7 @@ def find_max_index(data_list,time_list):
             
         time_add = time_add+1     
     return [x_data,time_list[time_index]]
-        
+'''     
 if __name__ == '__main__':
     cfg = Cfg_file('./data/cfg_file.CFG')
     #下面这三个函数必须按照相应顺序来进行操作
@@ -402,35 +414,35 @@ if __name__ == '__main__':
     print (np.sqrt(a3))
     
     #使用matplotlib绘制A,B,C相的电压图
-    '''
-    plt.figure(figsize=(80,40))
-    plt.plot(chs.ch_objects[0].ch_points[0],chs.ch_objects[0].ch_points[1],color='yellow',linewidth=2)
+    
+    #plt.figure(figsize=(80,40))
+    #plt.plot(chs.ch_objects[0].ch_points[0],chs.ch_objects[0].ch_points[1],color='yellow',linewidth=2)
     #plt.plot(x0_new,y3_plsq,'go')
     #plt.plot(a0_time,y1,'ro')
     #plt.plot(x1_news,y1_plsq,'yo')
     #plt.plot(chs.ch_objects[1].ch_points[0],chs.ch_objects[1].ch_points[1],color='green',linewidth=2)
     #plt.plot(chs.ch_objects[2].ch_points[0],chs.ch_objects[2].ch_points[1],color='red',linewidth=2)
-    plt.xlabel("Time(us)")
-    plt.ylabel(chs.ch_objects[0].ch_info.munit)
-    plt.title("First Example")
-    plt.legend()
-    plt.show()
-    '''
-    import datetime
+    #plt.xlabel("Time(us)")
+    #plt.ylabel(chs.ch_objects[0].ch_info.munit)
+    #plt.title("First Example")
+    #plt.legend()
+    #plt.show()
+    
+    
     datet = datetime.datetime.strptime(' '.join(cfg.start_t),"%d/%m/%Y %H:%M:%S.%f")
     #print (datet)
     dd = datet+datetime.timedelta(microseconds=1110000)
     #print (dd)
     
     #使用plotly绘制
-    '''
-    import plotly.graph_objects as go
+    
+    #import plotly.graph_objects as go
 
     #data = go.Scatter(x=chs.ch_objects[0].ch_points[0][:-1],y=chs.ch_objects[0].ch_points[1][:-1],mode="lines")
-    data1 = go.Scatter(x=a_time,y=a_onecycle,mode="lines")
-    data2 =  go.Scatter(x=a_time,y=a_onecycle2,mode="markers")
-    fig = go.Figure(data=[data1,data2])
-    fig.update_layout(title_text=u"电压波形")
-    fig.show()
-    '''
+    #data1 = go.Scatter(x=a_time,y=a_onecycle,mode="lines")
+    #data2 =  go.Scatter(x=a_time,y=a_onecycle2,mode="markers")
+    #fig = go.Figure(data=[data1,data2])
+    #fig.update_layout(title_text=u"电压波形")
+    #fig.show()
+'''    
     
